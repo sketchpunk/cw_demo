@@ -1,0 +1,23 @@
+{
+  "name": "cw_demo",
+  "version": "1.0.0",
+  "description": "Take home test for CW Interview",
+  "author": "Pedro Sousa",
+  "license": "ISC",
+  "keywords": [],
+  "main": "index.js",
+  "type": "module",
+  "homepage": "https://github.com/sketchpunk/cw_demo#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/sketchpunk/cw_demo.git" },
+  "bugs": { "url": "https://github.com/sketchpunk/cw_demo/issues" },
+  "scripts": {
+    "dev:client": "vite",
+    "dev:server": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "vite": "^6.1.0"
+  }
+}
