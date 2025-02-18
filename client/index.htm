@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>WebSocket Client</title>
+<script defer type="module">
+// #region IMPORT
+import WebClient    from './WebClient.js';
+import StateProxy   from './StateProxy.js';
+// #endregion
+
+// #region MAIN
+const App = {
+    client : new WebClient(),
+    state  : new StateProxy( { isActive:false } ),
+};
+
+const GetElm  = ( id )=>document.getElementById( id );
+const OnClick = ( id, fn )=>GetElm( id ).addEventListener( 'click', fn );
+
+const sendMsg = ()=>{
+    if( !App.client.isOpen ){
+        console.log( 'NOT CONNECTED' );
+        return;
+    }
+};
+
+// create job - { jobID: ”the-job-id”, status: ”SUCCESS” }
+
+window.addEventListener( 'load', ()=>{
+    OnClick( 'btnConnect', ()=>App.client.isOpen ? App.client.disconnect() : App.client.connect() );
+    OnClick( 'btnTest', ()=>sendMsg( {} ) );
+});
+// #endregion
+
+// #region EVENT BINDING
+
+App.client.on( 'active', e=>{ App.state.isActive = e.detail; } );
+
+App.state.$.on( 'isActive', e=>{ 
+    GetElm('btnConnect').textContent = e.detail ? 'Disconnect' : 'Connect';
+});
+
+// #endregion
+
+</script></head><body>
+<style>
+    .container{ width:600px; height:400px; border:1px solid red; margin:auto auto; }
+</style>
+
+    <div class="container">
+        <button id="btnConnect">Connect</button>
+        <button id="btnTest">Test_Job</button>
+    </div>
+
+</body></html>
