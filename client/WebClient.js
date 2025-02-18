@@ -69,7 +69,7 @@ export default class WebClient{
     off( evtName, fn ){ this.events.removeEventListener( evtName, fn ); return this; }
     once( evtName, fn ){ this.events.addEventListener( evtName, fn, { once:true } ); return this; }
     emit( evtName, data ){ 
-        console.log( 'EmitClient', evtName, data );
+        // console.log( 'EmitClient', evtName, data );
         this.events.dispatchEvent( new CustomEvent( evtName, { detail:data, bubbles: false, cancelable:true, composed:false } ) ); 
         return this;
     }

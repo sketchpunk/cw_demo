@@ -82,7 +82,17 @@ const ROUTES = {
         addUser( ws, color, ws.__client.id );
         sendJson( ws, { op:'register', color, userId: ws.__client.id } );
 
-        console.log( 'Registering user', color, ws.__client.id );
+        // console.log( 'Registering user', color, ws.__client.id );
+    },
+
+    // { "op":"create_job" }
+    'create_job': ws=>{
+        const id = uuid();
+        sendJson( ws, { op:'create_job', jobID: id, status: 'QUEUED' } );
+
+        setTimeout( ()=>{
+            sendJson( ws, { op:'create_job', jobID: id, status: 'SUCCESS' } );
+        }, 3000 );
     },
 
 };
