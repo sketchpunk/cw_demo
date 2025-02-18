@@ -3,8 +3,9 @@
 import { WebSocketServer } from 'ws';
 // #endregion
 
-// #region CONSTANTS
+// #region CONSTANTS / GLOBAL
 const PORT = 8080;
+let USERS = {};
 let serv;
 // #endregion
 
@@ -41,6 +42,7 @@ function onServerHeaders( h, req ){
     // console.log( '---Headers', h ); 
     console.log( '---Headers' ); 
 }
+
 function onServerListening(){
     const addr = serv.address();
     console.log( `Listening on ws://localhost:${addr.port}` );
@@ -48,7 +50,9 @@ function onServerListening(){
     // console.log( addr.address );
     // console.log( addr.family );
 }
+
 function onServerClose(){ console.log( '---Server shutting down---'); }
+
 function onServerError( err ){
     console.log( '---Server Error---');
     console.log( err );
@@ -67,10 +71,40 @@ function onServerUpgrade( req, socket, head ){
 }
 // #endregion
 
+// #region LOGIC
+
+const ROUTES = {
+
+    // { "op":"register" }
+    'register': ws=>{
+        const color  = hsvRGB( Math.random() );
+        
+        addUser( ws, color, ws.__client.id );
+        sendJson( ws, { op:'register', color, userId: ws.__client.id } );
+
+        console.log( 'Registering user', color, ws.__client.id );
+    },
+
+};
+
+function sendJson( ws, json ){ ws.send( JSON.stringify( json ) ) }
+
+function addUser( ws, color, userId ){
+    USERS[ uuid ] = { ws, color, userId };
+}
+
+function delUser( userId ){
+    delete USERS[ userId ];
+}
+
+// #endregion
+
 // #region CLIENT SOCKET HANDLER
 class WSClient{
     constructor( ws ){
         this.ws = ws;
+        this.id = uuid();
+
         ws.on( 'open',      this.onOpen );
         ws.on( 'message',   this.onMessage );
         ws.on( 'close',     this.onClose );
@@ -99,17 +133,31 @@ class WSClient{
         this.ws.__client    = null;
         this.ws             = null;
 
+        // https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
         // 1000: Normal closure – The connection is closed normally (the connection is successfully finished).
         // 1001: Going away – The server is shutting down (e.g., the server is going offline).
         // 1002: Protocol error – There was a protocol violation, such as receiving an invalid frame.
         // 1003: Unsupported data – The server does not support the type of data being sent.
         // 1006: Abnormal closure – The connection was closed unexpectedly (for example, no close frame was received).
+
+        // 1005: No Status:Reserved. NOTE: When user chooses to disconnect I get this code value
     };
 
-    onMessage = ( msg )=>{
-        console.log( 'message', typeof msg, msg.toString() );
-        console.log( msg.length );
+    onMessage = ( buf )=>{
 
+        // Test if the first character is a "{", it can be a sign that its JSON data
+        if( buf.length > 0 && buf[0] === 123 ){
+            try{
+                const json = JSON.parse( buf.toString() );
+                if( json.op ){
+                    const op = ROUTES[ json.op ];
+                    if( op ) op( this.ws, json );
+                }
+            }catch( err ){
+                console.log( 'ERROR ONMESSAGE', buf.toString(), err );
+            }
+        }
+        
         // setTimeout( ()=>{
         //     this.ws.send( 'W00T!' );
         // }, 2000 );
@@ -126,6 +174,57 @@ class WSClient{
     onPong = ( data, mask )=>{ console.log( '---Client Pong' ); };
     // #endregion
 }
+// #endregion
+
+// #region HELPERS
+// Values 0 & 1, Hue, sat, value ( light )
+function hsvRGB( h, s= 1.0, v= 1.0 ){
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Convert HSV to NORMALIZED RGB
+    const i = Math.floor(h * 6);
+    const f = h * 6 - i;
+    const p = v * (1 - s);
+    const q = v * (1 - f * s);
+    const t = v * (1 - (1 - f) * s);
+
+    let col;
+
+    switch( i % 6 ){
+        case 0: col = [ v, t, p ]; break;
+        case 1: col = [ q, v, p ]; break;
+        case 2: col = [ p, v, t ]; break;
+        case 3: col = [ p, q, v ]; break;
+        case 4: col = [ t, p, v ]; break;
+        case 5: col = [ v, p, q ]; break;
+    }
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Convert color the integer
+    const cn =  (~ ~( col[ 0 ] * 255 )) << 16 |
+                (~ ~( col[ 1 ] * 255 )) << 8  |
+                (~ ~( col[ 2 ] * 255 ));
+
+    // Then convert integer to hex string
+    return '#'+('000000' + cn.toString( 16 )).substr( -6 );
+}
+
+function uuid(){
+    // let dt = new Date().getTime();
+    // if( window.performance && typeof window.performance.now === 'function' ) dt += performance.now(); // use high-precision timer if available
+    
+    // Change to work in Node
+    const hrTime = process.hrtime(); // Returns [seconds, nanoseconds]
+    let dt = hrTime[0] * 1000 + hrTime[1] / 1e6; // Convert to milliseconds
+
+    const id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace( /[xy]/g, c=>{
+        const r = ( dt + Math.random() * 16 ) % 16 | 0;
+        dt = Math.floor( dt / 16 );
+        return ( ( c == 'x' )? r : ( r & 0x3 | 0x8 ) ).toString( 16 );
+    });
+
+    return id;
+}
+
 // #endregion
 
 // #region STARTUP

@@ -10,7 +10,11 @@ import StateProxy   from './StateProxy.js';
 // #region MAIN
 const App = {
     client : new WebClient(),
-    state  : new StateProxy( { isActive:false } ),
+    state  : new StateProxy( { 
+        isActive    : false,
+        usrColor    : '',
+        usrId       : '',
+    } ),
 };
 
 const GetElm  = ( id )=>document.getElementById( id );
@@ -31,9 +35,33 @@ window.addEventListener( 'load', ()=>{
 });
 // #endregion
 
+// #region LOGIC
+
+const ROUTES = {
+    'register': ( json )=>{
+        console.log( '---User Registered', 'color', json.color, 'userId', json.userId );
+        App.state.usrColor = json.color;
+        App.state.usrId    = json.userId;
+    },
+}
+
+// #endregion
+
 // #region EVENT BINDING
 
-App.client.on( 'active', e=>{ App.state.isActive = e.detail; } );
+App.client.on( 'active', e=>{ 
+    App.state.isActive = e.detail;
+
+    // If connection has been established, register user
+    if( e.detail ){
+        App.client.sendJson( { op:'register' } );
+    }
+} );
+
+App.client.on( 'message', e=>{
+    const op = ROUTES[ e.detail.op ];
+    if( op ) op( e.detail );
+} );
 
 App.state.$.on( 'isActive', e=>{ 
     GetElm('btnConnect').textContent = e.detail ? 'Disconnect' : 'Connect';

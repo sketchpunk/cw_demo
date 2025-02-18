@@ -1,3 +1,5 @@
+// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket
+
 export default class WebClient{
     // #region MAIN
     socket = null;
@@ -35,6 +37,9 @@ export default class WebClient{
             this.emit( 'active', false );
         }
     }
+
+    send( str ){ this.socket.send( str ); }
+    sendJson( json ){ this.send( JSON.stringify( json ) ); };
     // #endregion
 
     // #region WEBSOCKET EVENTS
@@ -45,6 +50,10 @@ export default class WebClient{
 
     onMessage = e=>{
         console.log( 'Message from server ', e.data );
+        if( e.data.length > 0 && e.data[0] === '{' ){
+            const json = JSON.parse( e.data );
+            this.emit( 'message', json );
+        }
     };
 
     onError = e=>{ console.log( '---ERROR', e ); };
@@ -59,7 +68,11 @@ export default class WebClient{
     on( evtName, fn ){ this.events.addEventListener( evtName, fn ); return this; }
     off( evtName, fn ){ this.events.removeEventListener( evtName, fn ); return this; }
     once( evtName, fn ){ this.events.addEventListener( evtName, fn, { once:true } ); return this; }
-    emit( evtName, data ){ this.events.dispatchEvent( new CustomEvent( evtName, { detail:data, bubbles: false, cancelable:true, composed:false } ) ); return this; }
+    emit( evtName, data ){ 
+        console.log( 'EmitClient', evtName, data );
+        this.events.dispatchEvent( new CustomEvent( evtName, { detail:data, bubbles: false, cancelable:true, composed:false } ) ); 
+        return this;
+    }
     // #endregion
 
 }

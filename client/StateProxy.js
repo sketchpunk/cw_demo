@@ -62,7 +62,7 @@ class $State{
     }
     
     emit( evtName, data ){
-        console.log( 'EMIT', evtName, data );
+        // console.log( 'EMIT', evtName, data );
         this.events.dispatchEvent( new CustomEvent( evtName, { detail:data, bubbles: false, cancelable:true, composed:false } ) );
         return this;
     }
