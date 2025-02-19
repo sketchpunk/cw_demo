@@ -82,6 +82,8 @@ const ROUTES = {
         addUser( ws, color, ws.__client.id );
         sendJson( ws, { op:'register', color, userId: ws.__client.id } );
 
+        pushUserList(); // Notify everyone about new user
+
         // console.log( 'Registering user', color, ws.__client.id );
     },
 
@@ -100,11 +102,30 @@ const ROUTES = {
 function sendJson( ws, json ){ ws.send( JSON.stringify( json ) ) }
 
 function addUser( ws, color, userId ){
-    USERS[ uuid ] = { ws, color, userId };
+    USERS[ userId ] = { ws, color, userId };
 }
 
 function delUser( userId ){
     delete USERS[ userId ];
+}
+
+function pushUserList(){
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Generate user list
+    const list = [];
+    for( const i of Object.values( USERS ) ){
+        list.push( {
+            userId  : i.userId,
+            color   : i.color,
+        } );
+    }
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Push list to all active users
+    const json = { op: 'user_list', list };
+    for( const i of Object.values( USERS ) ){
+        sendJson( i.ws, json );
+    }
 }
 
 // #endregion
@@ -134,6 +155,10 @@ class WSClient{
 
     onClose = ( status, reason )=>{
         console.log( '---Client Disconnected', status, reason.toString() );
+        // Get rid of the user from the list
+        delUser( this.ws.__client.id );
+
+        // Cleanup
         this.ws.off( 'open',      this.onOpen );
         this.ws.off( 'message',   this.onMessage );
         this.ws.off( 'close',     this.onClose );
@@ -142,6 +167,9 @@ class WSClient{
         this.ws.off( 'pong',      this.onPong );
         this.ws.__client    = null;
         this.ws             = null;
+
+        // Notify all users that user has been logged out
+        pushUserList();
 
         // https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
         // 1000: Normal closure – The connection is closed normally (the connection is successfully finished).
