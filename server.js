@@ -4,9 +4,13 @@ import { WebSocketServer } from 'ws';
 // #endregion
 
 // #region CONSTANTS / GLOBAL
-const PORT = 8080;
-let USERS = {};
-let serv;
+const PORT       = 8080;            // Server listening port
+const WORLD_SIZE = [ 400, 350 ];    // Size of the 2d canvas
+const SPEED      = 20;              // Distance to move user
+const PNT_SIZE   = 10;
+
+let USERS = {};                     // List of activer users
+let serv;                           // Global ref to Socket Server
 // #endregion
 
 // #region SERVER
@@ -82,7 +86,8 @@ const ROUTES = {
         addUser( ws, color, ws.__client.id );
         sendJson( ws, { op:'register', color, userId: ws.__client.id } );
 
-        pushUserList(); // Notify everyone about new user
+        pushUserList();         // Notify everyone about new user
+        pushUserLocations();    // Notify everyone user locations
 
         // console.log( 'Registering user', color, ws.__client.id );
     },
@@ -97,12 +102,55 @@ const ROUTES = {
         }, 3000 );
     },
 
+    // { "op":"move_point", "userId":"x", "x":1, "y":0 }
+    'move_point': ( ws, json )=>{
+        // console.log( 'MovePoint', json );
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        const usr = USERS[ json.userId ];
+        if( !usr ){
+            console.log( 'move_point: user not found - ', json.userId );
+            return;
+        }
+
+        let isOk = false;
+        let p    = 0;
+
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // Try to move user to new position
+        if( json.x ){
+            p = usr.x + json.x * SPEED;
+            if( p < 0 ) p = 0;
+            if( p >= WORLD_SIZE[0] - PNT_SIZE ) p = WORLD_SIZE[0] - PNT_SIZE;
+            if( p !== usr.x ){
+                usr.x = p;
+                isOk  = true;
+            }
+        }
+
+        if( json.y ){
+            p = usr.y + json.y * SPEED;
+            if( p < 0 ) p = 0;
+            if( p >= WORLD_SIZE[1] - PNT_SIZE ) p = WORLD_SIZE[1] - PNT_SIZE;
+            if( p !== usr.y ){
+                usr.y = p;
+                isOk  = true;
+            }
+        }
+
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // If movement passes all move constraints, notify all users
+        if( isOk ) pushUserLocations();
+    },
 };
 
 function sendJson( ws, json ){ ws.send( JSON.stringify( json ) ) }
 
 function addUser( ws, color, userId ){
-    USERS[ userId ] = { ws, color, userId };
+    USERS[ userId ] = { 
+        ws, color, userId, 
+        x : Math.round( Math.random() * WORLD_SIZE[0] ),
+        y : Math.round( Math.random() * WORLD_SIZE[1] ),
+    };
 }
 
 function delUser( userId ){
@@ -110,7 +158,6 @@ function delUser( userId ){
 }
 
 function pushUserList(){
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Generate user list
     const list = [];
     for( const i of Object.values( USERS ) ){
@@ -120,14 +167,27 @@ function pushUserList(){
         } );
     }
 
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Push list to all active users
-    const json = { op: 'user_list', list };
-    for( const i of Object.values( USERS ) ){
-        sendJson( i.ws, json );
-    }
+    pushToAll( { op: 'user_list', list } );
 }
 
+function pushUserLocations(){
+    // Generate user location list
+    const list = [];
+    for( const i of Object.values( USERS ) ){
+        list.push( {
+            color   : i.color,
+            x       : i.x,
+            y       : i.y,
+        } );
+    }
+
+    pushToAll( { op: 'user_loc', list } );
+}
+
+function pushToAll( json ){
+    const str = JSON.stringify( json );
+    for( const i of Object.values( USERS ) ) i.ws.send( str );
+}
 // #endregion
 
 // #region CLIENT SOCKET HANDLER
@@ -168,8 +228,9 @@ class WSClient{
         this.ws.__client    = null;
         this.ws             = null;
 
-        // Notify all users that user has been logged out
+        // Notify all users of new list & positions
         pushUserList();
+        pushUserLocations();
 
         // https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
         // 1000: Normal closure – The connection is closed normally (the connection is successfully finished).
