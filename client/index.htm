@@ -7,17 +7,31 @@
 import WebClient    from './WebClient.js';
 import StateProxy   from './StateProxy.js';
 import Canvas       from './Canvas.js';
+
+// TEST INPUT WITH : https://hardwaretester.com/gamepad
+import GamepadInput from './input/GamepadInput.js';
 // #endregion
 
 // #region MAIN
 const App = {
-    canvas : new Canvas( 'pgCanvas', 400, 350 ),
-    client : new WebClient(),
-    state  : new StateProxy( { 
+    canvas  : new Canvas( 'pgCanvas', 400, 350 ),
+    gamepad : new GamepadInput(),
+    client  : new WebClient(),
+    state   : new StateProxy( { 
         isActive    : false,
+        hasXboxCtrl : false,
         usrColor    : '',
         usrId       : '8aaab890-0efc-4816-b1a3-87cc2c09e700',
     } ),
+};
+
+App.gamepad.onControlReady = ( profile )=>{
+    console.log( 'GAMEPAD Profile', profile );
+
+    if( profile.key === 'Xbox 360' ){
+        App.state.hasXboxCtrl = true;
+        pollingGamepad();
+    }
 };
 
 const GetElm  = ( id )=>document.getElementById( id );
@@ -151,6 +165,31 @@ function renderUserLocations( list ){
 
 // #endregion
 
+// #region GAMEPAD
+
+const POLE_LMT = 1;
+let pollTime   = new Date().getTime();
+
+function pollingGamepad(){
+    if( App.state.hasXboxCtrl ){
+        const t = new Date().getTime();
+        if( t - pollTime >= POLE_LMT * 1000 ){
+            pollTime = t;
+            App.gamepad.poll();
+            
+            const axis = App.gamepad.items[ 0 ].getAxesValue( 'joyStickR' );
+            if( Math.abs( axis[0] ) > 0.01 || Math.abs( axis[1] ) > 0.01 ){
+                console.log( axis );
+                movePoint( axis[0], axis[1] );
+            }
+        }
+
+        requestAnimationFrame( pollingGamepad );
+    }
+}
+
+// #endregion
+
 </script></head><body>
 <style>
     /* #region GLOBAL */
@@ -241,7 +280,8 @@ function renderUserLocations( list ){
                     <button id="btnRT"><i class="fa-regular fa-square-caret-right"></i></button>
                     <button id="btnDN"><i class="fa-regular fa-square-caret-down"></i></button>
                 </div>
-                or Keyboard Arrows Keys
+                or Keyboard Arrows Keys<br>
+                or Xbox 360 Controller
             </div>
         </aside>
     </div>
