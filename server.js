@@ -4,10 +4,11 @@ import { WebSocketServer } from 'ws';
 // #endregion
 
 // #region CONSTANTS / GLOBAL
-const PORT       = 8080;            // Server listening port
-const WORLD_SIZE = [ 400, 350 ];    // Size of the 2d canvas
-const SPEED      = 20;              // Distance to move user
-const PNT_SIZE   = 10;
+const PORT          = 8080;            // Server listening port
+const WORLD_SIZE    = [ 400, 350 ];    // Size of the 2d canvas
+const SPEED         = 20;              // Distance to move user
+const PNT_SIZE      = 10;              // Size of point drawn on canvas
+const BOT_TIME_SEC  = 3;               // Timer for bot's movement
 
 let USERS = {};                     // List of activer users
 let serv;                           // Global ref to Socket Server
@@ -40,6 +41,9 @@ async function initServer(){
         // console.log( ws.upgradeReq );
         // console.log( serv.clients.has( ws ) );
     });
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    initBot();
 }
 
 function onServerHeaders( h, req ){ 
@@ -105,41 +109,7 @@ const ROUTES = {
     // { "op":"move_point", "userId":"x", "x":1, "y":0 }
     'move_point': ( ws, json )=>{
         // console.log( 'MovePoint', json );
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        const usr = USERS[ json.userId ];
-        if( !usr ){
-            console.log( 'move_point: user not found - ', json.userId );
-            return;
-        }
-
-        let isOk = false;
-        let p    = 0;
-
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // Try to move user to new position
-        if( json.x ){
-            p = usr.x + json.x * SPEED;
-            if( p < 0 ) p = 0;
-            if( p >= WORLD_SIZE[0] - PNT_SIZE ) p = WORLD_SIZE[0] - PNT_SIZE;
-            if( p !== usr.x ){
-                usr.x = p;
-                isOk  = true;
-            }
-        }
-
-        if( json.y ){
-            p = usr.y + json.y * SPEED;
-            if( p < 0 ) p = 0;
-            if( p >= WORLD_SIZE[1] - PNT_SIZE ) p = WORLD_SIZE[1] - PNT_SIZE;
-            if( p !== usr.y ){
-                usr.y = p;
-                isOk  = true;
-            }
-        }
-
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // If movement passes all move constraints, notify all users
-        if( isOk ) pushUserLocations();
+        moveUser( json.userId, json.x, json.y );
     },
 };
 
@@ -155,6 +125,44 @@ function addUser( ws, color, userId ){
 
 function delUser( userId ){
     delete USERS[ userId ];
+}
+
+function moveUser( userId, x, y ){
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    const usr = USERS[ userId ];
+    if( !usr ){
+        console.log( 'move_point: user not found - ', userId );
+        return;
+    }
+
+    let isOk = false;
+    let p    = 0;
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Try to move user to new position
+    if( x ){
+        p = usr.x + x * SPEED;
+        if( p < 0 ) p = 0;
+        if( p >= WORLD_SIZE[0] - PNT_SIZE ) p = WORLD_SIZE[0] - PNT_SIZE;
+        if( p !== usr.x ){
+            usr.x = p;
+            isOk  = true;
+        }
+    }
+
+    if( y ){
+        p = usr.y + y * SPEED;
+        if( p < 0 ) p = 0;
+        if( p >= WORLD_SIZE[1] - PNT_SIZE ) p = WORLD_SIZE[1] - PNT_SIZE;
+        if( p !== usr.y ){
+            usr.y = p;
+            isOk  = true;
+        }
+    }
+
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // If movement passes all move constraints, notify all users
+    if( isOk ) pushUserLocations();
 }
 
 function pushUserList(){
@@ -186,7 +194,7 @@ function pushUserLocations(){
 
 function pushToAll( json ){
     const str = JSON.stringify( json );
-    for( const i of Object.values( USERS ) ) i.ws.send( str );
+    for( const i of Object.values( USERS ) ) i.ws?.send( str );
 }
 // #endregion
 
@@ -323,6 +331,59 @@ function uuid(){
 
     return id;
 }
+
+// #endregion
+
+// #region BOT
+
+function initBot(){
+    addUser( null, '#505050', 'bot' );
+    setInterval( moveBot, BOT_TIME_SEC * 1000 );
+}
+
+function moveBot(){
+    // Dont run bot if no users are logged in, only user should be bot
+    if( USERS.length > 1 ) return;
+
+    // Random movement for bot, use same user controls
+    // const x = Math.round( 2 * Math.random() ) - 1;
+    // const y = Math.round( 2 * Math.random() ) - 1;
+
+    // Random didn't give a good result, 
+    // lets try noise as it always did a good job in the past
+    const t = Date.now() / 1000;
+    const x = 3 * smoothNoise( t, 0 ) - 1.5;
+    const y = 3 * smoothNoise( t + 0.5, 101 ) - 1.5;
+    moveUser( 'bot', x, y );
+
+    // console.log( 'Moving Bot', t, x, y );
+}
+
+function smoothNoise(x, y) {
+    const xInt = Math.floor(x);
+    const yInt = Math.floor(y);
+    const xFrac = x - xInt;
+    const yFrac = y - yInt;
+  
+    const v1 = random(xInt, yInt);
+    const v2 = random(xInt + 1, yInt);
+    const v3 = random(xInt, yInt + 1);
+    const v4 = random(xInt + 1, yInt + 1);
+  
+    const i1 = interpolate(v1, v2, xFrac);
+    const i2 = interpolate(v3, v4, xFrac);
+  
+    return interpolate(i1, i2, yFrac);
+  }
+  
+  function interpolate(a, b, t) {
+    return (1 - t) * a + t * b;
+  }
+  
+  function random(x, y) {
+    const seed = x * 57 + y * 577;
+    return (Math.sin(seed) * 43758.5453 + seed) % 1;
+  }
 
 // #endregion
 

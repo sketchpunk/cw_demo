@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>WebSocket Client</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <script defer type="module">
 // #region IMPORT
 import WebClient    from './WebClient.js';
 import StateProxy   from './StateProxy.js';
+import Canvas       from './Canvas.js';
 // #endregion
 
 // #region MAIN
 const App = {
+    canvas : new Canvas( 'pgCanvas', 400, 350 ),
     client : new WebClient(),
     state  : new StateProxy( { 
         isActive    : false,
@@ -29,14 +32,42 @@ const sendJson = ( json )=>{
     App.client.sendJson( json );
 };
 
-// create job - { op:'create_job' jobID: ”the-job-id”, status: ”SUCCESS” }
+const movePoint = ( x, y )=>{
+    // console.log( 'move', x, y, App.state.usrId );
+    sendJson({
+        op      : 'move_point',
+        userId  : App.state.usrId,
+        x, y,
+    });
+};
+
+const moveUP = ()=>movePoint( 0, -1 );
+const moveLF = ()=>movePoint( -1, 0 );
+const moveRT = ()=>movePoint( 1, 0 );
+const moveDN = ()=>movePoint( 0, 1 );
 
 window.addEventListener( 'load', ()=>{
     OnClick( 'btnConnect', ()=>App.client.isOpen ? App.client.disconnect() : App.client.connect() );
     OnClick( 'btnTest', ()=>sendJson( { op:'create_job' } ) );
 
+    OnClick( 'btnUP', moveUP );
+    OnClick( 'btnLF', moveLF );
+    OnClick( 'btnRT', moveRT );
+    OnClick( 'btnDN', moveDN );
+
     // TESTING
     // renderUserList( [{"userId":"8aaab890-0efc-4816-b1a3-87cc2c09e700","color":"#5bff00"}] );
+    // renderUserLocations( [{"color":"#00ff91","x":131,"y":149}] );
+});
+
+window.addEventListener( 'keydown', e=>{
+    // console.log( e.keyCode );
+    switch( e.keyCode ){
+        case 37: moveLF(); return;
+        case 38: moveUP(); return;
+        case 39: moveRT(); return;
+        case 40: moveDN(); return;
+    }
 });
 // #endregion
 
@@ -50,8 +81,8 @@ const ROUTES = {
     },
 
     'create_job': ( json )=>{ GetElm( 'lblJob' ).textContent = `${json.status} :: ${json.jobID}`; },
-
     'user_list': ( json )=>renderUserList( json.list ),
+    'user_loc' : ( json )=>renderUserLocations( json.list ),
 }
 
 // #endregion
@@ -65,8 +96,6 @@ App.client.on( 'active', e=>{
     // If connection has been established, register user
     if( e.detail ){
         App.client.sendJson( { op:'register' } );
-    }else{
-        renderUserList();
     }
 } );
 
@@ -74,13 +103,20 @@ App.client.on( 'active', e=>{
 App.client.on( 'message', e=>{
     const op = ROUTES[ e.detail.op ];
     if( op ) op( e.detail );
-} );
+});
 
 // When the connection state changes
 App.state.$.on( 'isActive', e=>{ 
-    GetElm('btnConnect').textContent = e.detail ? 'Disconnect' : 'Connect';
-});
+    const b = e.detail;
+    GetElm( 'btnConnect' ).textContent  = b ? 'Disconnect' : 'Connect';
+    GetElm( 'pnUI' ).style.display      = b ? '' : 'none';
 
+    // Reset ui renders back to disconnected state
+    if( !b ){
+        renderUserList();
+        renderUserLocations();
+    }
+});
 // #endregion
 
 // #region RENDERS
@@ -101,53 +137,112 @@ function renderUserList( list ){
     }
 }
 
+function renderUserLocations( list ){
+    App.canvas.clear();
+
+    if( list ){
+        for( const i of list ){
+            App.canvas
+                .fill( i.color )
+                .rect( i.x, i.y, 10, 10, 1 );
+        }
+    }
+}
+
 // #endregion
 
 </script></head><body>
 <style>
+    /* #region GLOBAL */
     body{ background-color:#212121; color:#c0c0c0; font-family:monospace; }
     hr{ width:100%; border-style:dashed; border-color:#707070; }
+    
     button{ border:1px solid #505050; background-color:#303030; color:#b0b0b0; border-radius:3px; padding:4px 0px; }
     button:active{ background-color:#404040; }
+
     h3{ margin:0px; text-align:center; }
+
     ul{ margin:0px; padding:0px; list-style-type:none; }
     li{ white-space: nowrap; overflow:hidden; text-overflow: ellipsis;
         margin: 4px 0px; padding: 4px 6px; border-radius:4px;
         color:#212121; font-size:1.1em;
     }
 
-    .container{ width:600px; height:400px; 
+    canvas{ border:1px solid #707070; flex:1; margin:10px; box-sizing: border-box; min-width:100px; }
+    /* #endregion */
+
+    /* #region LAYOUT */
+    .container{ width:fit-content; height:fit-content;
         border:1px solid #707070; margin:auto auto;
         display: flex;
         flex-direction:row;
         box-sizing: border-box;
     }
 
-    .container > main{ flex: 1 1 auto; display:flex; overflow:hidden; }
+    .container > main{ flex: 0 0 auto; display:flex; overflow:hidden; width:fit-content; }
     .container > aside{ 
-        flex: 0 0 150px; width:150px; padding:10px 10px 10px 0px;
+        flex: 0 0 200px; width:200px; padding:10px 10px 10px 0px;
         border:0px solid red; 
         display:flex; flex-direction:column; 
         box-sizing: border-box;
     }
+    .container > aside > div { display:flex; flex-direction:column; }
+    /* #endregion */
 
+    /* #region JOYSTICK */
+    .joy {
+        width:fit-content; margin:5px auto;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        grid-column-gap: 5px;
+        grid-row-gap: 0px;
+    }
+
+    .joy > button { 
+        font-size:34px; line-height:1px;
+        border:0px; padding:0px; 
+        background-color:transparent; color:#707070;
+        cursor:pointer;
+    }
+    .joy > button:active{ color:lime; }
+
+    .joy > button:nth-child(1){ grid-area: 1 / 2 ; }
+    .joy > button:nth-child(2){ grid-area: 2 / 1 ; }
+    .joy > button:nth-child(3){ grid-area: 2 / 3; }
+    .joy > button:nth-child(4){ grid-area: 3 / 2; }
+    /* #endregion */
+
+    /* #region MISC */
     .lblWrap{ word-wrap: break-word; word-wrap: break-all; text-align:center; }
-
-    canvas{ border:1px solid #707070; flex:1; margin:10px; box-sizing: border-box; min-width:100px;  }
+    /* #endregion */
 </style>
 
     <div class="container">
         <main>
-            <canvas></canvas>
+            <canvas id="pgCanvas"></canvas>
         </main>
         <aside>
             <button id="btnConnect">Connect</button>
-            <hr>
-            <button id="btnTest">Create Job</button>
-            <div id="lblJob" class="lblWrap">No Jobs</div>
-            <hr>
-            <h3>User List</h3>
-            <ul id="lstUsers"></ul>
+            <div id="pnUI" style="display:none">
+                <hr>
+                <button id="btnTest">Create Job</button>
+                <div id="lblJob" class="lblWrap">No Jobs</div>
+                
+                <hr>
+                <h3>User List</h3>
+                <ul id="lstUsers"></ul>
+                
+                <hr>
+                <h3>Controls</h3>
+                <div class="joy">
+                    <button id="btnUP"><i class="fa-regular fa-square-caret-up"></i></button>
+                    <button id="btnLF"><i class="fa-regular fa-square-caret-left"></i></button>
+                    <button id="btnRT"><i class="fa-regular fa-square-caret-right"></i></button>
+                    <button id="btnDN"><i class="fa-regular fa-square-caret-down"></i></button>
+                </div>
+                or Keyboard Arrows Keys
+            </div>
         </aside>
     </div>
 
